@@ -65,6 +65,22 @@ install only what your project needs:
 ./manifests/optional-crds/install.sh kserve
 ```
 
+`kserve` also installs cert-manager first (kserve's webhook TLS cert depends
+on it) - skipped automatically if cert-manager's CRDs are already present.
+
+If `kserve-controller-manager` crash-loops with `"too many open files"`,
+that's a host-level Linux inotify limit, not a cluster problem - kind's
+containers share the host's inotify watch/instance limits, and the defaults
+are often too low for a watch-heavy controller-runtime manager:
+
+```sh
+sudo sysctl fs.inotify.max_user_watches=524288
+sudo sysctl fs.inotify.max_user_instances=8192
+```
+
+Then delete the crashing pod so it restarts clean:
+`kubectl -n kserve delete pod -l control-plane=kserve-controller-manager`
+
 ## Layout
 
 - `kind-config.yaml` - single-node kind cluster definition, including the
