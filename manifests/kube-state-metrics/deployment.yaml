@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kube-state-metrics
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kube-state-metrics
+  template:
+    metadata:
+      labels:
+        app: kube-state-metrics
+    spec:
+      serviceAccountName: kube-state-metrics
+      containers:
+        - name: kube-state-metrics
+          image: registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.13.0
+          # Real kube-state-metrics reports whatever's actually in the
+          # cluster (kube_pod_resource_request from real pod specs,
+          # kube_node_labels from real node labels) - so faking GPU usage is
+          # just a matter of creating pods/nodes with the right requests and
+          # labels, not faking metric values by hand.
+          #
+          # kube_pod_resource_request/limit are opt-in (not emitted by
+          # default even with --resources=pods) as of KSM v2.13, and
+          # kube_node_labels only exposes labels matching
+          # --metric-labels-allowlist - both need to be turned on explicitly
+          # or the operator's default PromQL query silently returns nothing.
+          args:
+            - --resources=pods,nodes
+            - --metric-opt-in-list=kube_pod_resource_request,kube_pod_resource_limit
+            - --metric-labels-allowlist=nodes=[*]
+          ports:
+            - name: http-metrics
+              containerPort: 8080
+            - name: telemetry
+              containerPort: 8081

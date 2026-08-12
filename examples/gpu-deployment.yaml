@@ -1,0 +1,27 @@
+# A fake GPU-consuming workload for exercising a GPU-quota controller
+# against this mock cluster. Requests nvidia.com/gpu - only schedulable
+# after running scripts/patch-gpu-node.sh to fake capacity for it. Runs a
+# trivial pause container, since there's no real GPU workload to run.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-gpu-workload
+  namespace: demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: demo-gpu-workload
+  template:
+    metadata:
+      labels:
+        app: demo-gpu-workload
+    spec:
+      containers:
+        - name: pause
+          image: registry.k8s.io/pause:3.9
+          resources:
+            requests:
+              nvidia.com/gpu: "1"
+            limits:
+              nvidia.com/gpu: "1"

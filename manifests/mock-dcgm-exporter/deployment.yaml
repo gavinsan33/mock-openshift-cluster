@@ -1,0 +1,72 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mock-dcgm-exporter
+  namespace: monitoring
+data:
+  # Real dcgm-exporter scrapes actual GPU hardware, which kind nodes don't
+  # have. This serves static DCGM-shaped series instead, for projects that
+  # need to test a spec.query override against DCGM_FI_DEV_* metrics
+  # specifically (most GPU-hours queries here use kube-state-metrics
+  # reservation data instead, which doesn't need this at all - see
+  # gpu-quota-operator's metrics.DefaultGPUHoursQueryTemplate).
+  #
+  # Edit these lines (or the exported_namespace/exported_pod labels) to
+  # match whatever fake workload/namespace you're testing against.
+  metrics.prom: |
+    # HELP DCGM_FI_DEV_GPU_UTIL GPU utilization (in %).
+    # TYPE DCGM_FI_DEV_GPU_UTIL gauge
+    DCGM_FI_DEV_GPU_UTIL{gpu="0",modelName="NVIDIA A100-SXM4-80GB",exported_namespace="demo",exported_pod="demo-gpu-pod"} 87
+    # HELP DCGM_FI_DEV_FB_USED Framebuffer memory used (in MiB).
+    # TYPE DCGM_FI_DEV_FB_USED gauge
+    DCGM_FI_DEV_FB_USED{gpu="0",modelName="NVIDIA A100-SXM4-80GB",exported_namespace="demo",exported_pod="demo-gpu-pod"} 40960
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mock-dcgm-exporter
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mock-dcgm-exporter
+  template:
+    metadata:
+      labels:
+        app: mock-dcgm-exporter
+    spec:
+      containers:
+        - name: mock-dcgm-exporter
+          image: nginx:1.27-alpine
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: metrics
+              mountPath: /usr/share/nginx/html/metrics
+              subPath: metrics.prom
+            - name: nginx-conf
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: default.conf
+      volumes:
+        - name: metrics
+          configMap:
+            name: mock-dcgm-exporter
+        - name: nginx-conf
+          configMap:
+            name: mock-dcgm-exporter-nginx-conf
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mock-dcgm-exporter-nginx-conf
+  namespace: monitoring
+data:
+  default.conf: |
+    server {
+      listen 8080;
+      location = /metrics {
+        default_type text/plain;
+        alias /usr/share/nginx/html/metrics;
+      }
+    }

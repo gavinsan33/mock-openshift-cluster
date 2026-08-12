@@ -1,0 +1,20 @@
+# kube-scheduler is a static pod, not a Deployment, so there's no Service
+# for it by default. This exposes its existing pod (labeled
+# component=kube-scheduler by kubeadm/kind) on its secure port so Prometheus
+# has a stable DNS name to scrape /metrics/resources at - the endpoint that
+# actually emits kube_pod_resource_request/kube_pod_resource_limit
+# (KEP-1748). These are NOT kube-state-metrics metrics, despite comments
+# to that effect sometimes floating around - kube-state-metrics only emits
+# the per-container kube_pod_container_resource_requests/_limits.
+apiVersion: v1
+kind: Service
+metadata:
+  name: kube-scheduler-metrics
+  namespace: kube-system
+spec:
+  selector:
+    component: kube-scheduler
+  ports:
+    - name: https-metrics
+      port: 10259
+      targetPort: 10259

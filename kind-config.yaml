@@ -1,0 +1,18 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: mock-openshift
+nodes:
+  - role: control-plane
+    kubeadmConfigPatches:
+      # kind's default kube-scheduler binds its secure metrics port to
+      # 127.0.0.1, unreachable from any in-cluster Service/Prometheus - a
+      # real cluster's monitoring stack needs this opened up too, kind just
+      # doesn't do it by default the way kubeadm-provisioned clusters
+      # sometimes are configured to. This is what makes
+      # kube_pod_resource_request/_limit (see
+      # manifests/kube-scheduler-metrics/) scrapeable at all.
+      - |
+        kind: ClusterConfiguration
+        scheduler:
+          extraArgs:
+            bind-address: "0.0.0.0"

@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: monitoring
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+    scrape_configs:
+      - job_name: kube-state-metrics
+        static_configs:
+          - targets: ["kube-state-metrics.monitoring.svc:8080"]
+      - job_name: mock-dcgm-exporter
+        static_configs:
+          - targets: ["mock-dcgm-exporter.monitoring.svc:8080"]
+      # kube_pod_resource_request/_limit - what the GPU-hours default query
+      # actually joins against - come from kube-scheduler's
+      # /metrics/resources endpoint (KEP-1748), not kube-state-metrics.
+      # Auth: Prometheus's own auto-mounted ServiceAccount token, granted
+      # access to the /metrics/resources nonResourceURL by
+      # manifests/kube-scheduler-metrics/rbac.yaml.
+      - job_name: kube-scheduler-resources
+        metrics_path: /metrics/resources
+        scheme: https
+        tls_config:
+          insecure_skip_verify: true
+        authorization:
+          credentials_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        static_configs:
+          - targets: ["kube-scheduler-metrics.kube-system.svc:10259"]

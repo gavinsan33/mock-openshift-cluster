@@ -1,0 +1,24 @@
+# /metrics/resources is access-controlled by a non-resource URL, not a
+# normal API resource - no ClusterRole for it exists by default, so
+# Prometheus's ServiceAccount needs one explicitly (mirrors what a real
+# cluster's monitoring stack sets up for the same endpoint).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: scheduler-resources-metrics-reader
+rules:
+  - nonResourceURLs: ["/metrics/resources"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus-scheduler-resources-metrics-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: scheduler-resources-metrics-reader
+subjects:
+  - kind: ServiceAccount
+    name: prometheus
+    namespace: monitoring
