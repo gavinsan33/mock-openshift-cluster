@@ -28,10 +28,11 @@ server plus:
   queries that need DCGM data specifically rather than kube-scheduler
   reservation data. Edit `manifests/mock-dcgm-exporter/deployment.yaml`'s
   ConfigMap to change the fake values.
-- **A script to fake GPU node capacity** (`scripts/patch-gpu-node.sh`) -
-  patches a kind node's `status.capacity`/`allocatable` so
-  `nvidia.com/gpu`-requesting pods actually schedule, without the NVIDIA
-  device plugin or real GPU hardware.
+- **A recipe to fake GPU node capacity** (`just patch-gpu-node`) - patches a
+  kind node's `status.capacity`/`allocatable` so `nvidia.com/gpu`-requesting
+  pods actually schedule, without the NVIDIA device plugin or real GPU
+  hardware. Cumulative (`add`/`remove` adjust the existing count instead of
+  clobbering it) and defaults to the current node unless one is given.
 
 ## Usage
 
@@ -39,9 +40,13 @@ Recipes are run with [`just`](https://just.systems/) - if it's not already
 installed, run `make install-just` once. Then:
 
 ```sh
-just up               # create the kind cluster, install KSM + scheduler-metrics + mock DCGM + Prometheus
-just patch-gpu-node    # fake GPU capacity on the first node
-just apply-examples    # a demo namespace + GPU-requesting Deployment
+just up                       # create the kind cluster, install KSM + scheduler-metrics + mock DCGM + Prometheus
+just patch-gpu-node add                            # add 1 fake GPU (default) to the current node
+just patch-gpu-node add 4                          # add 4 more fake GPUs, cumulative with whatever's already there
+just patch-gpu-node remove 2                       # remove 2 fake GPUs (clamped at 0)
+just patch-gpu-node set 8                          # pin the node's fake GPU count to exactly 8
+just patch-gpu-node add 4 --node=worker2 --product=CUSTOM  # target a specific node/product label
+just apply-examples           # a demo namespace + GPU-requesting Deployment
 ```
 
 Run `just` with no arguments to see the full recipe list.
@@ -92,7 +97,7 @@ Then delete the crashing pod so it restarts clean:
 - `kind-config.yaml` - single-node kind cluster definition, including the
   `kubeadmConfigPatches` that opens up kube-scheduler's metrics port
 - `justfile` - recipes for cluster lifecycle (`up`/`down`/`patch-gpu-node`/`install-crds`); `Makefile` only bootstraps `just` itself
-- `scripts/` - `up.sh` / `down.sh` / `patch-gpu-node.sh` / `lib.sh` (shared podman/docker detection)
+- `scripts/` - `up.sh` / `down.sh` / `lib.sh` (shared podman/docker detection)
 - `manifests/kube-state-metrics/` - real KSM, scoped to pods/nodes RBAC only
 - `manifests/kube-scheduler-metrics/` - Service + RBAC exposing
   kube-scheduler's `/metrics/resources` endpoint
@@ -110,7 +115,7 @@ target, e.g.:
 [group('cluster')]
 dev-cluster:
     just -f ../mock-openshift-cluster/justfile up
-    just -f ../mock-openshift-cluster/justfile patch-gpu-node
+    just -f ../mock-openshift-cluster/justfile patch-gpu-node add
 ```
 
 Then layer your project's own CRDs/RBAC/sample workloads on top with a

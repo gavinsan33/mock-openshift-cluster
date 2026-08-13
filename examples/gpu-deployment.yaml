@@ -1,6 +1,6 @@
 # A fake GPU-consuming workload for exercising a GPU-quota controller
 # against this mock cluster. Requests nvidia.com/gpu - only schedulable
-# after running scripts/patch-gpu-node.sh to fake capacity for it. Runs a
+# after running `just patch-gpu-node add` to fake capacity for it. Runs a
 # trivial pause container, since there's no real GPU workload to run.
 apiVersion: apps/v1
 kind: Deployment
