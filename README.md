@@ -66,8 +66,9 @@ KServe's InferenceService). These aren't installed by `just up` by default -
 install only what your project needs:
 
 ```sh
-just install-crds jobset 
+just install-crds jobset
 just install-crds kserve
+just install-crds all      # both
 ```
 
 `kserve` also installs cert-manager first (kserve's webhook TLS cert depends
