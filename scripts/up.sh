@@ -7,6 +7,7 @@
 # itself. Safe to re-run; every step is idempotent.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
+source scripts/lib.sh
 
 CLUSTER_NAME=mock-openshift
 
@@ -32,4 +33,4 @@ echo "Cluster ready. To point a locally-run operator/webhook at Prometheus:"
 echo "  kubectl -n monitoring port-forward svc/prometheus 9090:9090"
 echo
 echo "To make a node schedule fake GPU workloads:"
-echo "  ./scripts/patch-gpu-node.sh <node-name> [gpu-count] [product-label]"
+echo "  just patch-gpu-node <node-name> [gpu-count] [product-label]"

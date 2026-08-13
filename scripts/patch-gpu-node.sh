@@ -10,6 +10,8 @@
 #   gpu-count:     defaults to 4
 #   product-label: defaults to NVIDIA-A100-SXM4-80GB
 set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+source scripts/lib.sh
 
 NODE="${1:-$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')}"
 GPU_COUNT="${2:-4}"

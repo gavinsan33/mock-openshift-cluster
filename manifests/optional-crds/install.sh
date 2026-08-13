@@ -7,7 +7,12 @@ set -euo pipefail
 
 case "${1:-}" in
   jobset)
-    kubectl apply --server-side -f https://github.com/kubernetes-sigs/jobset/releases/download/v0.7.2/manifests.yaml
+    # v0.7.2's manifest references gcr.io/kubebuilder/kube-rbac-proxy:v0.13.1
+    # for its metrics-proxy sidecar, which 404s - that image was removed
+    # from gcr.io upstream. v0.12.0 dropped the sidecar entirely (single
+    # manager container), sidestepping the broken reference.
+    kubectl apply --server-side -f https://github.com/kubernetes-sigs/jobset/releases/download/v0.12.0/manifests.yaml
+    kubectl -n jobset-system rollout status deployment/jobset-controller-manager --timeout=120s
     ;;
   kserve)
     # kserve.yaml provisions its webhook's TLS cert via cert-manager's
@@ -21,6 +26,22 @@ case "${1:-}" in
       kubectl -n cert-manager rollout status deployment/cert-manager-webhook --timeout=120s
     fi
     kubectl apply --server-side -f https://github.com/kserve/kserve/releases/download/v0.14.1/kserve.yaml
+    kubectl -n kserve rollout status deployment/kserve-controller-manager --timeout=120s
+    # kserve.yaml only ships the CRDs/controller, not any actual
+    # ClusterServingRuntime objects - without this, every InferenceService
+    # fails reconciliation with "no runtime found to support predictor with
+    # model type: {<format> <nil>}" for any modelFormat (sklearn, xgboost,
+    # etc.), since there's nothing registered to serve it.
+    kubectl apply --server-side -f https://github.com/kserve/kserve/releases/download/v0.14.1/kserve-cluster-resources.yaml
+    # KServe defaults new InferenceServices to "Serverless" deployment mode,
+    # which requires Knative Serving - not installed here (this cluster
+    # deliberately skips Knative/Istio to stay lightweight). Without this,
+    # every InferenceService's predictor silently never gets a Pod: no
+    # error, just an empty status forever. RawDeployment mode uses a plain
+    # Deployment/Service instead, no Knative required.
+    kubectl -n kserve patch configmap inferenceservice-config --type=merge \
+      -p '{"data":{"deploy":"{\"defaultDeploymentMode\": \"RawDeployment\"}"}}'
+    kubectl -n kserve rollout restart deployment/kserve-controller-manager
     kubectl -n kserve rollout status deployment/kserve-controller-manager --timeout=120s
     ;;
   *)

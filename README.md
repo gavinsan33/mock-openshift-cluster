@@ -35,11 +35,16 @@ server plus:
 
 ## Usage
 
+Recipes are run with [`just`](https://just.systems/) - if it's not already
+installed, run `make install-just` once. Then:
+
 ```sh
-./scripts/up.sh      # create the kind cluster, install KSM + scheduler-metrics + mock DCGM + Prometheus
-./scripts/patch-gpu-node.sh   # fake GPU capacity on the first node
-kubectl apply -f examples/    # a demo namespace + GPU-requesting Deployment
+just up               # create the kind cluster, install KSM + scheduler-metrics + mock DCGM + Prometheus
+just patch-gpu-node    # fake GPU capacity on the first node
+just apply-examples    # a demo namespace + GPU-requesting Deployment
 ```
+
+Run `just` with no arguments to see the full recipe list.
 
 Point a locally-run operator/webhook at Prometheus:
 
@@ -51,18 +56,18 @@ kubectl -n monitoring port-forward svc/prometheus 9090:9090
 Tear down:
 
 ```sh
-./scripts/down.sh
+just down
 ```
 
 ## Optional CRDs
 
 Some operators check for CRDs beyond core Kubernetes (e.g. JobSet,
-KServe's InferenceService). These aren't installed by `up.sh` by default -
+KServe's InferenceService). These aren't installed by `just up` by default -
 install only what your project needs:
 
 ```sh
-./manifests/optional-crds/install.sh jobset
-./manifests/optional-crds/install.sh kserve
+just install-crds jobset 
+just install-crds kserve
 ```
 
 `kserve` also installs cert-manager first (kserve's webhook TLS cert depends
@@ -85,7 +90,8 @@ Then delete the crashing pod so it restarts clean:
 
 - `kind-config.yaml` - single-node kind cluster definition, including the
   `kubeadmConfigPatches` that opens up kube-scheduler's metrics port
-- `scripts/` - `up.sh` / `down.sh` / `patch-gpu-node.sh`
+- `justfile` - recipes for cluster lifecycle (`up`/`down`/`patch-gpu-node`/`install-crds`); `Makefile` only bootstraps `just` itself
+- `scripts/` - `up.sh` / `down.sh` / `patch-gpu-node.sh` / `lib.sh` (shared podman/docker detection)
 - `manifests/kube-state-metrics/` - real KSM, scoped to pods/nodes RBAC only
 - `manifests/kube-scheduler-metrics/` - Service + RBAC exposing
   kube-scheduler's `/metrics/resources` endpoint
@@ -99,11 +105,11 @@ Then delete the crashing pod so it restarts clean:
 Clone alongside your project and reference it from a Makefile/justfile
 target, e.g.:
 
-```make
-.PHONY: dev-cluster
+```
+[group('cluster')]
 dev-cluster:
-	../mock-openshift-cluster/scripts/up.sh
-	../mock-openshift-cluster/scripts/patch-gpu-node.sh
+    just -f ../mock-openshift-cluster/justfile up
+    just -f ../mock-openshift-cluster/justfile patch-gpu-node
 ```
 
 Then layer your project's own CRDs/RBAC/sample workloads on top with a
