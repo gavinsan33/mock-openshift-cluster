@@ -1,0 +1,18 @@
+# Without this, kube-rbac-proxy only authenticates (any valid ServiceAccount
+# token from anywhere in the cluster passes) and never actually calls
+# SubjectAccessReview - see rbac.yaml's cluster-monitoring-view ClusterRole
+# for the rule this resourceAttributes block must match exactly.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kube-rbac-proxy-config
+  namespace: monitoring
+data:
+  config.yaml: |
+    authorization:
+      resourceAttributes:
+        namespace: monitoring
+        apiVersion: v1
+        resource: services
+        subresource: proxy
+        name: prometheus

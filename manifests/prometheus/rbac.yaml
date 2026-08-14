@@ -1,0 +1,44 @@
+# kube-rbac-proxy needs to create TokenReviews/SubjectAccessReviews against the
+# API server to validate incoming callers - system:auth-delegator is the
+# standard ClusterRole every kube-rbac-proxy deployment binds for this. Reuses
+# the same "prometheus" ServiceAccount as the Prometheus container itself
+# (see deployment.yaml) since kube-rbac-proxy runs as a sidecar in that pod,
+# not a separate identity.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus-auth-delegator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+  - kind: ServiceAccount
+    name: prometheus
+    namespace: monitoring
+---
+# Named to match OpenShift's own built-in cluster-monitoring-view ClusterRole,
+# so any project's RBAC that already binds to "cluster-monitoring-view" by
+# name against a real cluster (e.g. aibom-webhook-service's
+# aibom-workload-namespace chart, gpu-quota-operator's
+# monitoring_rolebinding.yaml) grants real access here too, with no
+# mock-cluster-specific override needed.
+#
+# Real OpenShift's version has much broader/different rules (namespace-scoped
+# tenant metrics access via Thanos Querier's own authorizer) - this only needs
+# to satisfy the single resourceAttributes check kube-rbac-proxy's
+# --config-file (configmap.yaml's kube-rbac-proxy-config) is configured to
+# perform: get on services/proxy, resourceName "prometheus", in the
+# "monitoring" namespace - i.e. "can this identity proxy to the mock
+# Prometheus Service at all". Without --config-file, kube-rbac-proxy only
+# authenticates (any valid token passes) and never actually calls SAR - this
+# ClusterRole/config-file pair is what makes authorization real.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cluster-monitoring-view
+rules:
+  - apiGroups: [""]
+    resources: ["services/proxy"]
+    resourceNames: ["prometheus"]
+    verbs: ["get"]
