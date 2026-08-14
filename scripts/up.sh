@@ -29,8 +29,7 @@ kubectl -n monitoring rollout status deployment/mock-dcgm-exporter --timeout=120
 kubectl -n monitoring rollout status deployment/prometheus --timeout=120s
 
 echo
-echo "Cluster ready. To point a locally-run operator/webhook at Prometheus:"
-echo "  kubectl -n monitoring port-forward svc/prometheus 9090:9090"
+echo "Cluster ready."
 echo
 echo "To make a node schedule fake GPU workloads:"
 echo "  just patch-gpu-node <node-name> [gpu-count] [product-label]"

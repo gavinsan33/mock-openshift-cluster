@@ -25,15 +25,42 @@ spec:
           image: prom/prometheus:v2.55.1
           args:
             - --config.file=/etc/prometheus/prometheus.yml
-          ports:
-            - containerPort: 9090
+            # Bound to localhost only - kube-rbac-proxy (below) is the only
+            # thing allowed to reach this directly. Nothing in-cluster can
+            # bypass the auth check by hitting port 9091 instead of 9090,
+            # since 9091 isn't exposed by the Service at all.
+            - --web.listen-address=127.0.0.1:9091
           volumeMounts:
             - name: config
               mountPath: /etc/prometheus
+        # Fronts the query API with the same bearer-token auth model real
+        # OpenShift's Thanos Querier uses (see rbac.yaml) - anything querying
+        # this Prometheus now needs a valid ServiceAccount token, same as a
+        # real cluster. Plain HTTP (--insecure-listen-address, not
+        # --secure-listen-address): this is about exercising the auth path
+        # a client already has to handle gracefully when absent (see
+        # aibom-webhook-service's postprocess.py), not the separate TLS-trust
+        # path - keeping this plain-HTTP avoids also having to mock a
+        # service-ca bundle nothing here would otherwise generate.
+        - name: kube-rbac-proxy
+          image: quay.io/brancz/kube-rbac-proxy:v0.15.0
+          args:
+            - --insecure-listen-address=0.0.0.0:9090
+            - --upstream=http://127.0.0.1:9091/
+            - --config-file=/etc/kube-rbac-proxy/config.yaml
+            - --logtostderr=true
+          ports:
+            - containerPort: 9090
+          volumeMounts:
+            - name: kube-rbac-proxy-config
+              mountPath: /etc/kube-rbac-proxy
       volumes:
         - name: config
           configMap:
             name: prometheus-config
+        - name: kube-rbac-proxy-config
+          configMap:
+            name: kube-rbac-proxy-config
 ---
 apiVersion: v1
 kind: Service

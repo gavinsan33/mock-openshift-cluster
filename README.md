@@ -23,6 +23,18 @@ server plus:
     `kubeadmConfigPatches`) via a Service, gated by the
     `/metrics/resources` nonResourceURL RBAC a real cluster's monitoring
     stack would also need.
+- **Auth-gated Prometheus** (`manifests/prometheus/`) - the query API sits behind a
+  [kube-rbac-proxy](https://github.com/brancz/kube-rbac-proxy) sidecar requiring a
+  valid ServiceAccount bearer token, same as real OpenShift's Thanos Querier. A
+  `cluster-monitoring-view` ClusterRole is provided under that exact name so any
+  project's RBAC that already binds to it by name against a real cluster (e.g.
+  aibom-webhook-service, gpu-quota-operator) grants real access here too, with no
+  mock-cluster-specific override needed. Plain HTTP, not HTTPS - this exercises the
+  auth path a client already has to handle gracefully when absent, not the separate
+  TLS-trust path, which would otherwise require also mocking a service-ca bundle.
+  Port-forwarding and querying anonymously from your host no longer works - point an
+  in-cluster ServiceAccount at it (or curl from a pod) with `-H "Authorization: Bearer
+  $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)"`.
 - **A mock DCGM exporter** (`manifests/mock-dcgm-exporter/`) - a static
   `/metrics` endpoint serving `DCGM_FI_DEV_*`-shaped series, for testing
   queries that need DCGM data specifically rather than kube-scheduler
@@ -50,13 +62,6 @@ just apply-examples           # a demo namespace + GPU-requesting Deployment
 ```
 
 Run `just` with no arguments to see the full recipe list.
-
-Point a locally-run operator/webhook at Prometheus:
-
-```sh
-kubectl -n monitoring port-forward svc/prometheus 9090:9090
-# then run your operator with --prometheus-url=http://localhost:9090
-```
 
 Tear down:
 
@@ -102,7 +107,7 @@ Then delete the crashing pod so it restarts clean:
 - `manifests/kube-scheduler-metrics/` - Service + RBAC exposing
   kube-scheduler's `/metrics/resources` endpoint
 - `manifests/mock-dcgm-exporter/` - static DCGM-shaped `/metrics` endpoint
-- `manifests/prometheus/` - Prometheus scraping all of the above
+- `manifests/prometheus/` - Prometheus scraping all of the above, fronted by kube-rbac-proxy for auth
 - `manifests/optional-crds/` - fetch-on-demand JobSet/KServe CRDs
 - `examples/` - a sample GPU-requesting namespace/Deployment to reconcile against
 
