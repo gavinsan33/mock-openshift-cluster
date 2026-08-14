@@ -6,13 +6,26 @@ cluster_name := "mock-openshift"
 
 # --- Cluster lifecycle ---------------------------------------------------
 
+# provider defaults to auto-detect (scripts/lib.sh: docker unless its daemon is
+# unreachable). Pass it explicitly - `just up docker` / `just up podman` - when
+# you need to target a specific engine regardless of what's installed, e.g. to
+# avoid ending up with two same-named clusters (one per engine) if both are
+# present. up/down must be given the same provider, or down will silently
+# no-op against the wrong engine and leave the other engine's cluster running.
+#
 # Create the kind cluster and install KSM + scheduler-metrics + mock DCGM + Prometheus. Safe to re-run.
 [group('cluster')]
-up:
+up provider="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    [ -n "{{ provider }}" ] && export KIND_EXPERIMENTAL_PROVIDER="{{ provider }}"
     ./scripts/up.sh
 
 [group('cluster')]
-down:
+down provider="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    [ -n "{{ provider }}" ] && export KIND_EXPERIMENTAL_PROVIDER="{{ provider }}"
     ./scripts/down.sh
 
 # Usage: just patch-gpu-node <add|remove|set> [count] [--node=x] [--product=x]
