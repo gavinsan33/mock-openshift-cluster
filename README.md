@@ -41,12 +41,17 @@ server plus:
   Port-forwarding and querying anonymously from your host no longer works - point an
   in-cluster ServiceAccount at it (or curl from a pod) with `-H "Authorization: Bearer
   $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)"`.
-- **A mock DCGM exporter** (`manifests/mock-dcgm-exporter/`) - a static
-  `/metrics` endpoint serving `DCGM_FI_DEV_*`-shaped series, for testing
-  queries that need DCGM data specifically rather than kube-scheduler
-  reservation data. Edit `manifests/mock-dcgm-exporter/deployment.yaml`'s
-  ConfigMap to change the fake values or the `exported_namespace`/
-  `exported_pod` labels to match a real pod you're testing against.
+- **A mock DCGM exporter** (`manifests/mock-dcgm-exporter/`) - a small
+  Python `/metrics` endpoint, for testing queries that need DCGM data
+  specifically rather than kube-scheduler reservation data. Pod discovery is
+  real: it lists pods cluster-wide via the Kubernetes API on every scrape and
+  emits a `DCGM_FI_DEV_*` series (with real `exported_namespace`/
+  `exported_pod` labels) for each pod actually requesting `nvidia.com/gpu` -
+  no need to hand-edit a static ConfigMap to match whatever pod you're
+  testing. Only the utilization/memory/power values themselves are
+  fabricated (`GPU_UTIL`/`FB_USED`/`POWER_USAGE` constants at the top of
+  `manifests/mock-dcgm-exporter/deployment.yaml`'s `server.py`) - every
+  discovered GPU pod gets the same fake reading.
   `manifests/prometheus/configmap.yaml`'s `prometheus-rules` ConfigMap
   layers `nerc:dcgm_{gpu_util,fb_used,power_usage}:avg5m` recording rules on
   top of these raw series (`avg_over_time`, no aggregation - every label,
