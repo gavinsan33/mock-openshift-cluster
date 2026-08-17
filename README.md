@@ -8,11 +8,11 @@ This is **not** a real OpenShift cluster - it doesn't provide Routes, SCCs,
 ClusterOperators, or the Build API. It provides a plain Kubernetes API
 server plus:
 
-- **Real [kube-state-metrics](https://github.com/kubernetes/kube-state-metrics)**
-  and a **scrapeable kube-scheduler**, both scraped by a real Prometheus.
-  Since they're the real thing, they report whatever's actually in the
-  cluster - fake a GPU workload by creating a pod/node with the right
-  requests/labels, not by hand-writing metric values:
+- **Real [kube-state-metrics](https://github.com/kubernetes/kube-state-metrics)**,
+  a **scrapeable kube-scheduler**, and the **kubelet's own cAdvisor endpoint**,
+  all scraped by a real Prometheus. Since they're the real thing, they report
+  whatever's actually in the cluster - fake a GPU workload by creating a
+  pod/node with the right requests/labels, not by hand-writing metric values:
   - `kube_node_labels` (from real node labels) comes from kube-state-metrics.
   - `kube_pod_resource_request`/`kube_pod_resource_limit` (per-pod GPU
     reservation) come from **kube-scheduler's own `/metrics/resources`
@@ -23,6 +23,12 @@ server plus:
     `kubeadmConfigPatches`) via a Service, gated by the
     `/metrics/resources` nonResourceURL RBAC a real cluster's monitoring
     stack would also need.
+  - `container_cpu_usage_seconds_total`/`container_memory_working_set_bytes`/
+    `container_network_{receive,transmit}_bytes_total` come from every node's
+    kubelet cAdvisor endpoint, scraped through the API server's node proxy
+    (`kubernetes-cadvisor` job in `manifests/prometheus/configmap.yaml`) since
+    kind's kubelet has no directly reachable Service either - real per-pod
+    resource usage, not mocked.
 - **Auth-gated Prometheus** (`manifests/prometheus/`) - the query API sits behind a
   [kube-rbac-proxy](https://github.com/brancz/kube-rbac-proxy) sidecar requiring a
   valid ServiceAccount bearer token, same as real OpenShift's Thanos Querier. A
@@ -39,7 +45,14 @@ server plus:
   `/metrics` endpoint serving `DCGM_FI_DEV_*`-shaped series, for testing
   queries that need DCGM data specifically rather than kube-scheduler
   reservation data. Edit `manifests/mock-dcgm-exporter/deployment.yaml`'s
-  ConfigMap to change the fake values.
+  ConfigMap to change the fake values or the `exported_namespace`/
+  `exported_pod` labels to match a real pod you're testing against.
+  `manifests/prometheus/configmap.yaml`'s `prometheus-rules` ConfigMap
+  layers `nerc:dcgm_{gpu_util,fb_used,power_usage}:avg5m` recording rules on
+  top of these raw series (`avg_over_time`, no aggregation - every label,
+  including `exported_pod`, passes through unchanged) for projects that query
+  those NERC-style rollup names rather than the raw `DCGM_FI_DEV_*` metrics
+  directly.
 - **A recipe to fake GPU node capacity** (`just patch-gpu-node`) - patches a
   kind node's `status.capacity`/`allocatable` so `nvidia.com/gpu`-requesting
   pods actually schedule, without the NVIDIA device plugin or real GPU

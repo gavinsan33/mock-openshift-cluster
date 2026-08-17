@@ -42,3 +42,35 @@ rules:
     resources: ["services/proxy"]
     resourceNames: ["prometheus"]
     verbs: ["get"]
+---
+# Lets Prometheus itself (not a caller of Prometheus - see cluster-monitoring-view
+# above) discover nodes for the kubernetes-cadvisor job's `role: node` service
+# discovery, and proxy each node's kubelet cAdvisor endpoint through the API
+# server (configmap.yaml's __metrics_path__ rewrite to
+# /api/v1/nodes/{name}/proxy/metrics/cadvisor) - kind's kubelet has no directly
+# reachable Service, same reasoning as kube-scheduler-metrics needing its own
+# Service for /metrics/resources.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cadvisor-metrics-reader
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["nodes/proxy"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus-cadvisor-metrics-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cadvisor-metrics-reader
+subjects:
+  - kind: ServiceAccount
+    name: prometheus
+    namespace: monitoring

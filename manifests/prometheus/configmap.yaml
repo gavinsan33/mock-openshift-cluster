@@ -7,6 +7,8 @@ data:
   prometheus.yml: |
     global:
       scrape_interval: 15s
+    rule_files:
+      - /etc/prometheus/rules/*.yaml
     scrape_configs:
       - job_name: kube-state-metrics
         static_configs:
@@ -29,3 +31,55 @@ data:
           credentials_file: /var/run/secrets/kubernetes.io/serviceaccount/token
         static_configs:
           - targets: ["kube-scheduler-metrics.kube-system.svc:10259"]
+      # container_cpu_usage_seconds_total/container_memory_working_set_bytes/
+      # container_network_{receive,transmit}_bytes_total - the kubelet's own
+      # cAdvisor endpoint. Real data, not mocked: kind nodes run real
+      # containers under a real kubelet, same as kube-state-metrics/
+      # kube-scheduler-resources above. Scraped through the API server's node
+      # proxy (kind's kubelet doesn't expose a directly reachable Service),
+      # authenticated the same way kube-scheduler-resources is - Prometheus's
+      # own ServiceAccount token, granted "get" on nodes/proxy by
+      # rbac.yaml's cadvisor-metrics-reader ClusterRole. ca_file is the API
+      # server's own CA (auto-mounted into every pod), not the kubelet's -
+      # this hits kubernetes.default.svc, so no insecure_skip_verify needed.
+      - job_name: kubernetes-cadvisor
+        scheme: https
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        authorization:
+          credentials_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        kubernetes_sd_configs:
+          - role: node
+        relabel_configs:
+          - action: labelmap
+            regex: __meta_kubernetes_node_label_(.+)
+          - target_label: __address__
+            replacement: kubernetes.default.svc:443
+          - source_labels: [__meta_kubernetes_node_name]
+            regex: (.+)
+            target_label: __metrics_path__
+            replacement: /api/v1/nodes/${1}/proxy/metrics/cadvisor
+---
+# aibom-webhook-service's postprocess.py (and any other NERC-style consumer)
+# queries "nerc:dcgm_*:avg5m" recording rule names directly, never the raw
+# DCGM_FI_DEV_* series - those recording rules exist on a real NERC/OpenShift
+# cluster's Prometheus but aren't something this mock's Prometheus evaluates
+# on its own, so they're defined here explicitly. avg_over_time with no `by`
+# clause keeps every label on the underlying series (including exported_pod,
+# exported_namespace, gpu) unchanged, which is what those consumers filter on.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-rules
+  namespace: monitoring
+data:
+  nerc-dcgm.yaml: |
+    groups:
+      - name: nerc-dcgm
+        rules:
+          - record: nerc:dcgm_gpu_util:avg5m
+            expr: avg_over_time(DCGM_FI_DEV_GPU_UTIL[5m])
+          - record: nerc:dcgm_fb_used:avg5m
+            expr: avg_over_time(DCGM_FI_DEV_FB_USED[5m])
+          - record: nerc:dcgm_power_usage:avg5m
+            expr: avg_over_time(DCGM_FI_DEV_POWER_USAGE[5m])
